@@ -1,0 +1,72 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "jarvis-app",
+    "version": "0.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true,
+      "fs": {
+        "all": true,
+        "scope": [
+          "**",
+          "D:/*",
+          "D:/repos/**",
+          "D:/repos/jarvis-appV2",
+          "D:/repos/jarvis-appV2/jarvis-app",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/**",
+          "$RESOURCE/**"
+        ]
+      },
+      "path": {
+        "all": true
+      },
+      "protocol": {
+        "all": true,
+        "asset": true,
+        "assetScope": [
+          "**",
+          "D:/*",
+          "D:/repos/**",
+          "D:/repos/jarvis-appV2",
+          "D:/repos/jarvis-appV2/jarvis-app",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug",
+          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/**",
+          "$RESOURCE/**"
+        ]
+      },
+      "dialog": {
+        "all": true
+      }
+    },
+    "windows": [
+      {
+        "title": "jarvis-app",
+        "width": 1486,
+        "height": 768,
+        "minWidth": 1486,
+        "minHeight": 768,
+        "resizable": true,
+        "url": "index.html"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; meadia-src 'self' asset: https://asset.localhost;"
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "jarvis-app"
+    }
+  }
+}
