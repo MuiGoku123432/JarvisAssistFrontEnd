@@ -21,9 +21,22 @@ fn read_file(file_path: String) -> Result<Vec<u8>, String> {
     }
 }
 
+#[tauri::command]
+fn get_websocket_url() -> String {
+    "ws://192.168.254.23:8765".to_string()
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![read_file])
+        .setup(|app| {
+            #[cfg(debug_assertions)]
+            {
+                let window = app.get_window("main").unwrap();
+                window.open_devtools();
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![read_file, get_websocket_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

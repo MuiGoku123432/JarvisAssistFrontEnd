@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import WebGLCanvas from './WebGLCanvas.jsx';
 import './App.css';
 import { readBinaryFile, readDir, removeFile } from '@tauri-apps/api/fs';
 import { join } from '@tauri-apps/api/path';
 import * as echarts from 'echarts';
 import CircularAudioWave from './libs/circular-audio-wave';
+import { invoke } from '@tauri-apps/api/tauri';
 
-// Ensure echarts is available globally
+
 window.echarts = echarts;
 
-const audioFolder = 'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs'; // Replace with the path to your audio folder
+const audioFolder = 'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs';
 
 const App = () => {
   const [initialized, setInitialized] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const socketRef = useRef(null);
+  const [isListening, setIsListening] = useState(false);
+  const audioMonitorRef = useRef(null);
+
 
   useEffect(() => {
     const chartContainer = document.getElementById('chart-container');
@@ -22,89 +28,189 @@ const App = () => {
         console.log('Initializing CircularAudioWave Component');
         window.wave = new CircularAudioWave(chartContainer);
       }
+      initializeAudio();
     } else {
       console.error('Chart container not found');
     }
   }, []);
 
-  const handleButtonClick = async () => {
-    console.log('Button clicked');
-    if (!initialized) {
-      try {
-        console.log('IN THE BAD PLACE AFTER INITIALIZE');
-        const entries = await readDir(audioFolder);
-        const wavFiles = entries.filter(entry => entry.name.toLowerCase().endsWith('.wav'));
-        console.log('WAV files:', wavFiles);
+  const initializeAudio = async () => {
+    try {
+      console.log('Initializing audio...');
+      const entries = await readDir(audioFolder);
+      const wavFiles = entries.filter(entry => entry.name.toLowerCase().endsWith('.wav'));
+      console.log('WAV files:', wavFiles);
 
-        if (wavFiles.length > 0) {
-          console.log('We have a WAV file to play!');
-          const filePath = await join(audioFolder, wavFiles[0].name);
-          console.log('File path:', filePath);
-          console.log('Loading initial audio...');
-          console.log('THIS IS IT IT IS HAPPENING', await readDir(audioFolder));
-          console.log('THIS IS IT IT IS HAPPENING', await readBinaryFile(filePath));
+      if (wavFiles.length > 0) {
+        console.log('We have a WAV file to play!');
+        const filePath = await join(audioFolder, wavFiles[0].name);
+        console.log('File path:', filePath);
+        console.log('Loading initial audio...');
 
-          await window.wave.loadAudio(filePath); // Replace with the actual path to your initial audio file
-          await window.wave.play();
-          await removeFile(filePath);
-          console.log('File deleted:', filePath);
-          setInitialized(true);
-          setTimeout(() => {
-            startMonitoringLoop();
-          }, 5000)
-        }
-        
-      } catch (error) {
-        console.error('Error during initial audio load:', error);
+        await window.wave.loadAudio(filePath);
+        await window.wave.play();
+        await window.wave.resetPlaying();
+        await window.wave.stop();
+
+        await removeFile(filePath);
+        console.log('File deleted:', filePath);
+        setInitialized(true);
       }
-    }
-    else {
-      console.warn('Audio already loaded');
+    } catch (error) {
+      console.error('Error during initial audio load:', error);
     }
   };
 
-  const startMonitoringLoop = () => {
-    const monitorFolder = async () => {
-      if (window.wave.isPlaying()) {
-        console.log('Audio is currently playing');
-        return; // Skip if the audio is currently playing
-      }
 
-      try {
-        const entries = await readDir(audioFolder);
-        const wavFiles = entries.filter(entry => entry.name.toLowerCase().endsWith('.wav'));
-        console.log('WAV files:', wavFiles);
+    useEffect(() => {
+      const connectWebSocket = async () => {
+        try {
+          // Get the WebSocket URL from the Rust backend
+          const wsUrl = await invoke('get_websocket_url');
+          socketRef.current = new WebSocket(wsUrl);
+  
+          socketRef.current.onopen = () => {
+            console.log('WebSocket Connected');
+            setIsListening(true);
+            startListening();
+          };
 
-        if (wavFiles.length > 0) {
-          console.log('We have a WAV file to play!');
-          const filePath = await join(audioFolder, wavFiles[0].name);
-          console.log('File path:', filePath);
-
-          try {
-            console.log('Trying to reload audio');
-            await window.wave.reLoadAudio(filePath);
-            
-            if (!window.wave.isPlaying()) {
-              await window.wave.play()
-              await removeFile(filePath);
-              console.log('File deleted:', filePath);
+      socketRef.current.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+        switch(data.type) {
+          case 'chat_response':
+            console.log('Received chat response');
+            setMessages(prev => [...prev, { type: 'assistant', content: data.response }]);
+            // Remove audio playback from here
+            startListening();
+            break;
+          case 'listen_response':
+            if (data.detected_text) {
+              setMessages(prev => [...prev, { type: 'user', content: data.detected_text }]);
+              processUserInput(data.detected_text);
+            } else {
+              startListening();
             }
-            //await window.wave.onended();
-            
-            
-          } catch (err) {
-            console.error('Error during playback:', err);
-          }
+            break;
+          default:
+            console.log('Unknown message type:', data.type);
         }
-      } catch (err) {
-        console.error('Error reading directory:', err);
+      };
+
+      socketRef.current.onclose = () => {
+        console.log('WebSocket Disconnected');
+        setIsListening(false);
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      socketRef.current.onerror = (error) => {
+        console.error('WebSocket Error:', error);
+        setIsListening(false);
+      };
+    } catch (error) {
+      console.error('Error connecting to WebSocket:', error);
+    }
+  };
+
+    connectWebSocket();
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
       }
     };
+  }, []);
 
-    //monitorFolder(); // Check immediately
-    const intervalId = setInterval(monitorFolder, 1000); // Check every second
+  useEffect(() => {
+    // Start monitoring for audio files
+    startAudioMonitoring();
 
-    return () => clearInterval(intervalId); // Clean up the interval on unmount
+    return () => {
+      // Clean up the interval when the component unmounts
+      if (audioMonitorRef.current) {
+        clearInterval(audioMonitorRef.current);
+      }
+    };
+  }, []);
+
+  const startAudioMonitoring = () => {
+    if (initialized && window.wave.isPlaying()) {
+      return; // Skip if the audio is currently playing
+    }
+    if (audioMonitorRef.current) {
+      clearInterval(audioMonitorRef.current);
+    }
+
+    audioMonitorRef.current = setInterval(async () => {
+      await checkAndPlayAudio();
+    }, 1000); // Check every second
+  };
+
+  const checkAndPlayAudio = async () => {
+    try {
+      const entries = await readDir(audioFolder);
+      const wavFiles = entries.filter(entry => entry.name.toLowerCase().endsWith('.wav'));
+
+      if (wavFiles.length > 0) {
+        const filePath = await join(audioFolder, wavFiles[0].name);
+        await playAudioResponse(filePath);
+        //await removeFile(filePath);
+      }
+    } catch (error) {
+      console.error('Error checking for audio files:', error);
+    }
+  };
+
+  const startListening = () => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ command: 'listen' }));
+      setIsListening(true);
+    }
+  };
+
+  const processUserInput = (input) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ command: 'chat', message: input }));
+    }
+  };
+
+  const playAudioResponse = async (filePath) => {
+    console.log('Starting playAudioResponse with path:', filePath);
+    console.log('AUDIO IS PLAYING: >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ', window.wave.isPlaying());
+
+    if (window.wave.isPlaying()) {
+      console.log('Audio is currently playing');
+      await removeFile(filePath);
+      console.log('File deleted:', filePath);
+      return; // Skip if the audio is currently playing
+    }
+
+    try {
+      console.log('Trying to reload audio');
+      
+          console.log('Audio STARTED******************************');
+          await window.wave.loadAudio(filePath);
+          await window.wave.play()
+          
+          await removeFile(filePath);
+          console.log('File deleted:', filePath);
+      
+    } catch (err) {
+      console.error('Error during playback:', err);
+    }
+  };
+
+  const handleButtonClick = () => {
+    connectWebSocket();
+    if (isListening) {
+      setIsListening(false);
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    } else {
+      startListening();
+    }
   };
 
   return (
@@ -112,7 +218,9 @@ const App = () => {
       <WebGLCanvas />
       <div className="overlay">
         <div>
-          <button id="button" className="play-button" onClick={handleButtonClick}>J.A.R.V.I.S</button>
+          <button id="button" className={isListening ? 'play-button-stop' : 'play-button-start'} onClick={handleButtonClick}>
+            {'J.A.R.V.I.S'}
+          </button>
         </div>
         <div id="chart-container" className='overlay'></div>
       </div>

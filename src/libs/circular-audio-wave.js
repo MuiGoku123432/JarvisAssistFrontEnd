@@ -16,6 +16,7 @@ class CircularAudioWave {
         this.chart = echarts.init(elem);
         this.playing = false;
         this.loading = false;
+        this.stopped = true;
         this.lineColorOffset = 0;
         this.tick = 0;
 
@@ -363,9 +364,11 @@ class CircularAudioWave {
         if (this.sourceNode && this.sourceNode.buffer) {
             console.log('IS ACTUALLY PLAYING')
             this.playing = true;
+            this.stopped = false;
             this.presetOption();
             this.sourceNode.start(0);
             this._debouncedDraw();
+
         } else {
             alert('Audio is not ready');
         }
@@ -579,6 +582,7 @@ class CircularAudioWave {
     };
     stop() {
         this.sourceNode.stop(0);
+        this.stopped = true;
       }
     
       isPlaying() {
@@ -587,6 +591,13 @@ class CircularAudioWave {
       isLoading() {
         return this.loading;
       }
+      isStopped() {
+        return this.stopped;
+      }
+    resetPlaying() {
+        this.playing = false;
+        //this.sourceNode.stop();
+    }
 }
 
 export default CircularAudioWave;
