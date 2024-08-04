@@ -6,11 +6,15 @@
   },
   "package": {
     "productName": "jarvis-app",
-    "version": "0.0.0"
+    "version": "1.0.0"
   },
   "tauri": {
     "allowlist": {
       "all": true,
+      "http": {
+        "all": true,
+        "scope": ["ws://localhost:8765", "ws://*", "wss://*", "http://*", "https://*", "ws://192.168.254.23:8765"]
+      },
       "fs": {
         "all": true,
         "scope": [
@@ -47,6 +51,9 @@
       },
       "dialog": {
         "all": true
+      },
+      "shell": {
+        "all": true
       }
     },
     "windows": [
@@ -61,7 +68,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; meadia-src 'self' asset: https://asset.localhost;"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://192.168.254.23:8765; media-src 'self' asset: https://asset.localhost;",
+      "dangerousUseHttpScheme": true
     },
     "bundle": {
       "active": true,
