@@ -3,7 +3,7 @@
 
 use tauri::Manager;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 // Define a command to read a file's content
@@ -22,6 +22,19 @@ fn read_file(file_path: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
+fn write_file(file_path: String, contents: Vec<u8>) -> Result<(), String> {
+    let mut file = match File::create(&file_path) {
+        Ok(file) => file,
+        Err(err) => return Err(format!("Error creating file: {}", err)),
+    };
+
+    match file.write_all(&contents) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(format!("Error writing to file: {}", err)),
+    }
+}
+
+#[tauri::command]
 fn get_websocket_url() -> String {
     "ws://192.168.254.23:8765".to_string()
 }
@@ -36,7 +49,7 @@ fn main() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![read_file, get_websocket_url])
+        .invoke_handler(tauri::generate_handler![read_file, write_file, get_websocket_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
