@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import WebGLCanvas from './WebGLCanvas.jsx';
 import './App.css';
-import { readBinaryFile, readDir, removeFile, writeFile } from '@tauri-apps/api/fs';
+import { readBinaryFile, removeFile } from '@tauri-apps/api/fs';
 import { join } from '@tauri-apps/api/path';
 import * as echarts from 'echarts';
 import CircularAudioWave from './libs/circular-audio-wave';
 import { invoke } from '@tauri-apps/api/tauri';
 import RecordRTC from 'recordrtc';
+import { MicVAD } from '@ricky0123/vad-web';
 
 window.echarts = echarts;
 const audioFolder = 'D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs';
@@ -19,11 +20,13 @@ const STATES = {
 };
 
 const App = () => {
-  const [messages, setMessages] = useState([]);
-  const socketRef = useRef(null);
   const [currentState, setCurrentState] = useState(STATES.IDLE);
+  const socketRef = useRef(null);
   const recorderRef = useRef(null);
+  const vadRef = useRef(null);
+  const vadInitializedRef = useRef(false);
   const timeoutRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
 
   const logState = useCallback((action) => {
     console.log(`${action} - Current State: ${currentState}`);
@@ -31,298 +34,254 @@ const App = () => {
 
   const setState = useCallback((newState) => {
     logState(`Transitioning from ${currentState} to ${newState}`);
+    if (currentState === newState) return;
     setCurrentState(newState);
   }, [currentState, logState]);
 
   useEffect(() => {
     const chartContainer = document.getElementById('chart-container');
-    if (chartContainer) {
-      console.log('Chart container found');
-      if (!window.wave) {
-        console.log('Initializing CircularAudioWave Component');
-        window.wave = new CircularAudioWave(chartContainer);
-      }
-    } else {
-      console.error('Chart container not found');
+    if (chartContainer && !window.wave) {
+      console.log('Initializing CircularAudioWave');
+      window.wave = new CircularAudioWave(chartContainer);
     }
 
+    initVAD();
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      if (recorderRef.current) {
-        recorderRef.current.destroy();
-      }
+      clearTimeout(timeoutRef.current);
+      clearTimeout(silenceTimeoutRef.current);
+      recorderRef.current?.destroy();
+      vadRef.current?.destroy();
     };
   }, []);
+
+  const initVAD = async () => {
+    try {
+      vadRef.current = await MicVAD.new({
+        onSpeechStart: () => {
+          if (currentState !== STATES.RECORDING) startRecording();
+          clearTimeout(silenceTimeoutRef.current);
+        },
+        onSpeechEnd: async (audio) => {
+          if (audio?.audioData && currentState === STATES.RECORDING) {
+            recorderRef.current?.stopRecording(() => {
+              recorderRef.current.destroy();
+              recorderRef.current = null;
+            });
+            setState(STATES.PROCESSING);
+            const wavBlob = new Blob([audio.audioData], { type: 'audio/wav' });
+            await uploadAudioFile(wavBlob);
+          } else {
+            silenceTimeoutRef.current = setTimeout(async () => {
+              if (currentState === STATES.RECORDING) await stopRecording();
+            }, 500);
+          }
+        },
+        positiveSpeechThreshold: 0.80,
+        negativeSpeechThreshold: 0.75,
+        minSpeechFrames: 5,
+        preSpeechPadFrames: 10,
+        redemptionFrames: 30,
+        silenceCaptureDuration: 0.5,
+        returnAudioData: true,
+      });
+      vadInitializedRef.current = true;
+    } catch (error) {
+      console.error('VAD init error:', error);
+    }
+  };
 
   useEffect(() => {
     const connectWebSocket = async () => {
       try {
         const wsUrl = await invoke('get_websocket_url');
         socketRef.current = new WebSocket(wsUrl);
-
-        socketRef.current.onopen = () => {
-          console.log('WebSocket Connected');
-          startListening();
-        };
-
+        socketRef.current.onopen = () => startListening();
         socketRef.current.onmessage = handleWebSocketMessage;
-
-        socketRef.current.onclose = () => {
-          console.log('WebSocket Disconnected');
-          setTimeout(connectWebSocket, 3000);
-        };
-
-        socketRef.current.onerror = (error) => {
-          console.error('WebSocket Error:', error);
-        };
+        socketRef.current.onclose = () => setTimeout(connectWebSocket, 3000);
       } catch (error) {
-        console.error('Error connecting to WebSocket:', error);
+        console.error('WebSocket error:', error);
       }
     };
-
     connectWebSocket();
-
-    // Set up interval to call startListening every 5 seconds
-    const intervalId = setInterval(() => {
-      startListening();
-    }, 5000);
-
     return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      if (recorderRef.current) {
-        recorderRef.current.destroy();
-      }
-
-      clearInterval(intervalId);
+      socketRef.current?.close();
+      clearTimeout(timeoutRef.current);
+      clearTimeout(silenceTimeoutRef.current);
+      recorderRef.current?.destroy();
+      vadRef.current?.destroy();
     };
   }, []);
 
   const handleWebSocketMessage = async (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      console.log('Received WebSocket message:', data);
-      switch(data.type) {
-        case 'chat_response':
-          console.log('Received chat response');
-          if (data.audio_url) {
-            await downloadAudio(data.audio_url);
-          }
-          break;
-        case 'transcription_result':
-          console.log('Received transcription result:', data.text);
-          break;
-        case 'start_listening':
-          console.log('Server requested to start listening');
-          await startRecording();
-          break;
-        case 'stop_listening_response':
-          console.log('Server confirmed stop listening');
-          break;
-        default:
-          console.log('Unknown message type:', data.type);
-      }
-    } catch (error) {
-      console.error('Error handling WebSocket message:', error);
+    const data = JSON.parse(event.data);
+    switch (data.type) {
+      case 'chat_response':
+        if (data.audio_url) await downloadAudio(data.audio_url);
+        break;
+      case 'start_listening':
+        await activateVAD();
+        break;
+      default:
+        break;
     }
   };
 
-
   const startListening = () => {
-    console.log('startListening called');
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      console.log('Sending listen request to server');
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: 'listen' }));
-    } else {
-      console.error('WebSocket is not open. Cannot start listening.');
+      setState(STATES.LISTENING);
     }
+  };
+
+  const activateVAD = async () => {
+    if (window.wave?.isPlaying()) return;
+    if (!vadInitializedRef.current) await initVAD();
+    try {
+      await vadRef.current.start();
+      setState(STATES.LISTENING);
+    } catch {
+      await startRecording();
+    }
+  };
+
+  const deactivateVAD = async () => {
+    try {
+      await vadRef.current.pause();
+      if (currentState === STATES.RECORDING) await stopRecording();
+    } catch (e) { console.error(e); }
   };
 
   const startRecording = async () => {
-    console.log('startRecording called');
-    if (recorderRef.current) {
-      console.log('Recording is already in progress. Skipping.');
-      return;
-    }
-    if (window.wave && window.wave.isPlaying()) {
-      console.log('Audio is currently playing. Skipping recording.');
-      return;
-    }
+    if (recorderRef.current || window.wave?.isPlaying()) return;
+    clearTimeout(timeoutRef.current);
+    clearTimeout(silenceTimeoutRef.current);
+    setState(STATES.RECORDING);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       recorderRef.current = new RecordRTC(stream, {
-        type: 'audio',
-        mimeType: 'audio/wav',
-        recorderType: RecordRTC.StereoAudioRecorder,
-        numberOfAudioChannels: 1,
+        type: 'audio', mimeType: 'audio/wav', recorderType: RecordRTC.StereoAudioRecorder,
+        numberOfAudioChannels: 1, desiredSampRate: 16000,
       });
-
-      recorderRef.current.startRecording();
-      console.log('Recording started');
-
-      // Stop recording after 5 seconds
-      timeoutRef.current = setTimeout(() => {
-        stopRecording();
-      }, 5000);
+      await recorderRef.current.startRecording();
+      timeoutRef.current = setTimeout(() => stopRecording(), 10000);
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error(error);
+      setState(STATES.IDLE);
     }
   };
 
-  const stopRecording = () => {
-    console.log('stopRecording called');
-    if (recorderRef.current) {
+  const stopRecording = async () => {
+    clearTimeout(timeoutRef.current);
+    if (!recorderRef.current) return;
+    setState(STATES.PROCESSING);
+    return new Promise((resolve) => {
       recorderRef.current.stopRecording(async () => {
-        console.log('Recording stopped');
-
-        let blob = await recorderRef.current.getBlob();
-        console.log('Recorded audio blob size:', blob.size, 'bytes');
-
-        if (blob.size > 0) {
-          await uploadAudioFile(blob);
-        } else {
-          console.warn('No audio data recorded');
-          //alert('No audio was detected. Please try speaking louder or check your microphone.');
-        }
-
-        // Destroy the recorder
+        const blob = await recorderRef.current.getBlob();
         recorderRef.current.destroy();
         recorderRef.current = null;
+        if (blob.size) await uploadAudioFile(blob);
+        else setState(STATES.IDLE);
+        resolve(true);
       });
-    } else {
-      console.warn('Attempted to stop recording, but recorder was not initialized');
-    }
+    });
   };
 
-
   const uploadAudioFile = useCallback(async (blob) => {
-    logState('uploadAudioFile called');
-    if (!(blob instanceof Blob) || blob.size === 0) {
-      console.error('Invalid or empty blob object:', blob);
-      setState(STATES.IDLE);
-      return;
-    }
-
+    setState(STATES.PROCESSING);
+    const audioBlob = blob.type === 'audio/wav' ? blob : new Blob([blob], { type: 'audio/wav' });
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'temp_audio.wav');
     try {
-      const formData = new FormData();
-      formData.append('audio', blob, 'temp_audio.wav');
-
-      console.log('Uploading audio file...');
-      const response = await fetch('http://192.168.254.23:5000/upload_audio', {
-        method: 'POST',
-        body: formData,
+      const res = await fetch('http://192.168.254.23:5000/upload_audio', {
+        method: 'POST', body: formData
       });
-
-      if (response.ok) {
-        console.log('Audio file uploaded successfully');
-        const responseText = await response.text();
-        console.log('Server response:', responseText);
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          console.log('Sending process_audio message via WebSocket');
-          socketRef.current.send(JSON.stringify({
-            type: 'process_audio',
-            filename: 'temp_audio.wav'
-          }));
-        } else {
-          console.error('WebSocket is not open, cannot send process_audio message');
-          setState(STATES.IDLE);
-        }
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to upload audio file:', response.status, response.statusText, errorText);
-        setState(STATES.IDLE);
-      }
-    } catch (error) {
-      console.error('Error uploading audio file:', error);
-      setState(STATES.IDLE);
+      if (res.ok) {
+        socketRef.current.send(JSON.stringify({ type: 'process_audio', filename: 'temp_audio.wav' }));
+      } else setState(STATES.IDLE);
+    } catch (e) {
+      console.error(e); setState(STATES.IDLE);
     }
-  }, [setState, logState]);
+  }, [setState]);
 
   const isValidWavFile = (header) => {
-    const riffHeader = String.fromCharCode(...header.slice(0, 4));
-    const waveHeader = String.fromCharCode(...header.slice(8, 12));
-    return riffHeader === 'RIFF' && waveHeader === 'WAVE';
+    return String.fromCharCode(...header.slice(0,4)) === 'RIFF'
+        && String.fromCharCode(...header.slice(8,12)) === 'WAVE';
   };
 
   const downloadAudio = async (audioUrl) => {
+    // 1. Don’t even start if already playing
     if (window.wave && window.wave.isPlaying()) {
       console.log('Audio is currently playing. Skipping download.');
       return;
     }
+  
+    await deactivateVAD();  // your VAD pause logic
     try {
       console.log('Downloading audio from:', audioUrl);
-      const response = await fetch(audioUrl, { method: 'GET' });
-      
-      if (response.ok) {
-        const arrayBuffer = await response.arrayBuffer();
-        const fileName = 'output.wav';
-        const filePath = await join(audioFolder, fileName);
-        // Use the new write_file function
-        await invoke('write_file', { 
-          filePath: filePath, 
-          contents: Array.from(new Uint8Array(arrayBuffer)) 
-        });
-        console.log('Audio file saved to:', filePath);
-
-        // Verify the file
-        const fileContent = await readBinaryFile(filePath);
-        const header = new Uint8Array(fileContent.slice(0, 12));
-        if (!isValidWavFile(header)) {
-          console.error('Downloaded file is not a valid WAV file');
-          await removeFile(filePath);
-          return null;
-        }
-
-        await playAudioResponse(filePath);
-        return filePath;
-      } else {
-        console.error('Failed to download audio file');
-        return null;
+      const res = await fetch(audioUrl);
+      if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  
+      const buffer = await res.arrayBuffer();
+      const filePath = await join(audioFolder, 'output.wav');
+      await invoke('write_file', {
+        filePath,
+        contents: Array.from(new Uint8Array(buffer)),
+      });
+  
+      // Quick WAV sanity check…
+      const header = new Uint8Array((await readBinaryFile(filePath)).slice(0, 12));
+      if (!isValidWavFile(header)) {
+        console.error('Not a valid WAV');
+        await removeFile(filePath);
+        return;
       }
-    } catch (error) {
-      console.error('Error downloading audio:', error);
-      return null;
+  
+      // 2. Now play (and await full playback) before returning
+      await playAudioResponse(filePath);
+      return filePath;
+  
+    } catch (err) {
+      console.error('downloadAudio error:', err);
+      setState(STATES.IDLE);
     }
   };
 
   const playAudioResponse = async (filePath) => {
-    console.log('Starting playAudioResponse with path:', filePath);
-    console.log('AUDIO IS PLAYING: >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> ', window.wave.isPlaying());
-
     if (!filePath) {
-      console.log('No audio file path provided');
+      console.log('No audio path provided');
+      return;
+    }
+    // 1. Guard again in case playAudioResponse is called directly
+    if (window.wave.isPlaying()) {
+      console.log('Audio is already playing. Skipping playback.');
       return;
     }
   
-
-    if (window.wave.isPlaying()) {
-      console.log('Audio is currently playing');
-      return;
-    }
-
     try {
-      console.log('Trying to play audio');
-      const fileContent = await readBinaryFile(filePath);
-      const header = new Uint8Array(fileContent.slice(0, 12));
-      console.log('File header:', Array.from(header).map(b => b.toString(16).padStart(2, '0')).join(' '));
-
-      console.log('Audio STARTED******************************');
+      setState(STATES.PROCESSING);
+      console.log('Loading audio into CircularAudioWave…');
       await window.wave.loadAudio(filePath);
-      await window.wave.play();
       
-      await removeFile(filePath);
-      console.log('File deleted:', filePath);
+      console.log('Starting playback…');
+      await window.wave.play();  
+      // ⚡️ this promise only resolves once the buffer’s ended :contentReference[oaicite:0]{index=0}&#8203;:contentReference[oaicite:1]{index=1}
+  
     } catch (err) {
-      console.error('Error during playback:', err);
+      console.error('playAudioResponse error:', err);
+  
+    } finally {
+      // 2. Always clean up afterwards
+      try {
+        await removeFile(filePath);
+        console.log('Deleted temp file:', filePath);
+      } catch (e) {
+        console.warn('Failed to delete file:', e);
+      }
+      setState(STATES.IDLE);
+      startListening();  // resume listening loop
     }
   };
-  
+
   const handleButtonClick = () => {
     console.log('handleButtonClick called');
     startListening();
