@@ -1,7 +1,7 @@
 import * as echarts from 'echarts'; // Import echarts
-import { invoke } from '@tauri-apps/api/tauri';
-import { convertFileSrc } from '@tauri-apps/api/tauri';
-import { readDir, removeFile, readBinaryFile } from '@tauri-apps/api/fs';
+import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { readDir, remove, readFile } from '@tauri-apps/plugin-fs';
 import decode, {decoders} from 'audio-decode';
 
 
@@ -246,58 +246,72 @@ class CircularAudioWave {
 
         this.chartOption = JSON.parse(JSON.stringify(this.defaultChartOption));
     }
-    async loadAudio(filePath) {
-        //const buffer = null;
-        //this.loading = true;
-        //console.log('BUFFER AT BEGIN', this.sourceNode.buffer, this.offlineContext.buffer);
-        if (this.sourceNode.buffer !== null || this.offlineContext.buffer !== undefined) {
-          this.sourceNode.buffer = null;
-          this.offlineContext.buffer = undefined;
-          //buffer = null;
-        }
+    // async loadAudio(filePath) {
+    //     //const buffer = null;
+    //     //this.loading = true;
+    //     //console.log('BUFFER AT BEGIN', this.sourceNode.buffer, this.offlineContext.buffer);
+    //     if (this.sourceNode.buffer !== null || this.offlineContext.buffer !== undefined) {
+    //       this.sourceNode.buffer = null;
+    //       this.offlineContext.buffer = undefined;
+    //       //buffer = null;
+    //     }
       
-        console.log(filePath);
-        this.filePath = filePath;
-        this._setupAudioNodes();
-        this._setupOfflineContext();
-        //console.log('BUFFER AT MIDDLE', this.sourceNode.buffer, this.offlineContext.buffer);
-        try {
+    //     console.log(filePath);
+    //     this.filePath = filePath;
+    //     this._setupAudioNodes();
+    //     this._setupOfflineContext();
+    //     //console.log('BUFFER AT MIDDLE', this.sourceNode.buffer, this.offlineContext.buffer);
+    //     try {
           
-          // Convert file path to URL
-          //const fileUrl = convertFileSrc(filePath);
+    //       // Convert file path to URL
+    //       //const fileUrl = convertFileSrc(filePath);
       
-          // Fetch the file content
-          //const fileContent = await fetch(fileUrl).then(res => res.arrayBuffer());
-          //fileContent = await invoke('read_file', { filePath });
-          const fileContent = await readBinaryFile(filePath);
-          const fileBuffer = fileContent.buffer;
-          const fileDecoded = await decode(fileContent);
-          console.log('FILE DECODED', fileDecoded);
-          return new Promise((resolve, reject) => {
+    //       // Fetch the file content
+    //       //const fileContent = await fetch(fileUrl).then(res => res.arrayBuffer());
+    //       //fileContent = await invoke('read_file', { filePath });
+    //       const fileContent = await readFile(filePath);
+    //       const fileBuffer = fileContent.buffer;
+    //       const fileDecoded = await decode(fileContent);
+    //       console.log('FILE DECODED', fileDecoded);
+    //       return new Promise((resolve, reject) => {
             
-            this.offlineContext.decodeAudioData(fileBuffer, buffer => {
-                this.sourceNode.buffer = buffer;
-                this.offlineSource.buffer = buffer;
-                this.offlineSource.start(0);
-                this.offlineContext.startRendering();
-            })
+    //         this.offlineContext.decodeAudioData(fileBuffer, buffer => {
+    //             this.sourceNode.buffer = buffer;
+    //             this.offlineSource.buffer = buffer;
+    //             this.offlineSource.start(0);
+    //             this.offlineContext.startRendering();
+    //         })
 
-            this.offlineContext.oncomplete = e => {
-              let buffer = e.renderedBuffer;
-              this.bpm = this._getBPM([buffer.getChannelData(0), buffer.getChannelData(1)]);
+    //         this.offlineContext.oncomplete = e => {
+    //           let buffer = e.renderedBuffer;
+    //           this.bpm = this._getBPM([buffer.getChannelData(0), buffer.getChannelData(1)]);
       
-              this._init();
-              resolve();
-            };
+    //           this._init();
+    //           resolve();
+    //         };
       
-            this.offlineContext.onerror = err => {
-              console.error('Error during offline rendering:', err);
-              reject(err);
-            };
-          });
-        } catch (error) {
-          console.error('Error loading audio:', error);
-        }
+    //         this.offlineContext.onerror = err => {
+    //           console.error('Error during offline rendering:', err);
+    //           reject(err);
+    //         };
+    //       });
+    //     } catch (error) {
+    //       console.error('Error loading audio:', error);
+    //     }
+    //   }
+
+    async loadAudio(filePath) {
+        // Read bytes from disk
+        const data = await readFile(filePath);
+        const arrayBuffer = data.buffer;
+      
+        // Decode into an AudioBuffer on the live context
+        this.buffer = await this.context.decodeAudioData(arrayBuffer);
+      
+        // Create an AnalyserNode for your waveform
+        this.analyser = this.context.createAnalyser();
+        this.analyser.smoothingTimeConstant = 0.3;
+        this.analyser.fftSize = 2048;
       }
 
       async reLoadAudio(filePath) {
@@ -310,7 +324,7 @@ class CircularAudioWave {
         console.log(filePath);
         this.filePath = filePath;
         try {
-          const fileContent = await readBinaryFile(filePath);
+          const fileContent = await readFile(filePath);
           const fileBuffer = fileContent.buffer;
           const fileDecoded = await decode(fileContent);
 
@@ -359,20 +373,70 @@ class CircularAudioWave {
         }
     }
 
-    play() {
-        console.warn('!!!!!!!!!!!!!!!!', this.sourceNode, this.sourceNode.buffer);
-        if (this.sourceNode && this.sourceNode.buffer) {
-            console.log('IS ACTUALLY PLAYING')
-            this.playing = true;
-            this.stopped = false;
-            this.presetOption();
-            this.sourceNode.start(0);
-            this._debouncedDraw();
+    // play() {
+    //     console.warn('!!!!!!!!!!!!!!!!', this.sourceNode, this.sourceNode.buffer);
+    //     if (this.sourceNode && this.sourceNode.buffer) {
+    //         console.log('IS ACTUALLY PLAYING')
+    //         this.playing = true;
+    //         this.stopped = false;
+    //         this.presetOption();
+    //         this.sourceNode.start(0);
+    //         this._debouncedDraw();
 
-        } else {
-            alert('Audio is not ready');
+    //     } else {
+    //         alert('Audio is not ready');
+    //     }
+    // }
+
+    play() {
+        // 1) Make sure audio is loaded
+        if (!this.buffer) {
+          console.warn('CircularAudioWave.play(): no audio buffer loaded');
+          return false;
         }
-    }
+        // 2) Prevent double‑starts
+        if (this.playing) {
+          console.warn('CircularAudioWave.play(): already playing');
+          return false;
+        }
+      
+        // 3) (Re)initialize the AudioContext if needed
+        if (!this.context || this.context.state === 'closed') {
+          this.context = new AudioContext();
+          this.analyser = this.context.createAnalyser();
+          this.analyser.smoothingTimeConstant = 0.3;
+          this.analyser.fftSize = 2048;
+        }
+      
+        // 4) Create a fresh BufferSourceNode
+        this.sourceNode = this.context.createBufferSource();
+        this.sourceNode.buffer = this.buffer;
+      
+        // 5) Wire up the analyser → destination
+        this.sourceNode.connect(this.analyser);
+        this.analyser.connect(this.context.destination);
+      
+        // 6) Hook into “ended” to clean up
+        this.sourceNode.onended = () => {
+          this.playing = false;
+          // Stop the draw loop
+          // Note: your existing _drawAnimation calls requestAnimationFrame of _debouncedDraw
+          // so we just need to stop scheduling more frames by setting this.playing = false
+          this.reset(); // reset chart & state for next play
+        };
+      
+        // 7) Start playback & kick off your draw loop
+        this.playing = true;
+        this.sourceNode.start(0);
+      
+        // Call your existing visualization loop starter
+        // which will call _drawAnimation → requestAnimationFrame(this._debouncedDraw)
+        this._drawAnimation();
+      
+        return true;
+      }
+
+
     // TODO
     pause() {
 

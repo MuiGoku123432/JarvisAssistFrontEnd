@@ -8,13 +8,34 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "1", features = [ "api-all", "devtools" ] }
+tauri = { version = "2", features = [ "protocol-asset", "devtools" ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
+tauri-plugin-http = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-os = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-mic-recorder = "2.0.0"
+voice_activity_detector = { version = "0.2.0", features = ["load-dynamic"] }
+cpal = "0.15"        # cross‑platform audio I/O  
+tao = "0.30.2"
+hound = "3.5.1"
+chrono = "0.4.41"
+
+
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
 custom-protocol = ["tauri/custom-protocol"]
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-global-shortcut = "2"
+
+
