@@ -26,13 +26,16 @@ jobs:
     needs: cross_compile
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v3
         with:
           path: ./artifacts
 
       - name: Attach to GitHub Release
-        uses: softprops/[email protected]  # correct owner/repo@ref
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: artifacts/**/*.{AppImage,rpm,deb,exe}
+          files: |
+            artifacts/**/*.AppImage
+            artifacts/**/*.rpm
+            artifacts/**/*.deb
+            artifacts/**/*.exe
