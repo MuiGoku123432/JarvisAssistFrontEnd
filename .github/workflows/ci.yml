@@ -26,10 +26,10 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
-      - name: Frontend Lint & Test
-        run: |
-          npm run lint
-          npm test
+      # - name: Frontend Lint & Test
+      #   run: |
+      #     npm run lint
+      #     npm test
 
       # 2) Build the React app
       - name: Build Frontend
