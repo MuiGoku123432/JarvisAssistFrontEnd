@@ -20,7 +20,7 @@ jobs:
 
   cross_compile:
     needs: semantic_release
-    uses: ./.github/workflows/cross-compile.yml  # must point to a workflow with on: workflow_call
+    uses: cross-compile.yml  # must point to a workflow with on: workflow_call
 
   attach_artifacts:
     needs: cross_compile
