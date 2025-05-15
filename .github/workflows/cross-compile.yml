@@ -10,15 +10,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
+        include:
+          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-pc-windows-gnu
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # 1) Linux host dependencies (GTK/WebKit/etc)
       - name: Install Linux native deps
         run: |
           sudo apt-get update
@@ -34,41 +33,40 @@ jobs:
             libxdo-dev \
             webkit2gtk-driver
 
-      # 2) Build the React front end
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 22
+
       - name: Install & build front end
         run: |
           npm ci
           npm run build
 
-      # 3) Rust + cross‑compile targets
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           components: clippy, rustfmt
+
       - name: Add Rust target
         run: rustup target add ${{ matrix.target }}
 
-      # 4) MinGW for Windows GNU on Ubuntu
-      - name: Install MinGW for Windows
+      - name: Install MinGW for Windows on Ubuntu
         run: sudo apt-get update && sudo apt-get install -y mingw-w64
 
-      # 5) Build Tauri backend (both targets)
-      - name: Build Tauri for ${{ matrix.target }}
+      - name: Build and bundle Tauri for ${{ matrix.target }}
         run: |
           cd src-tauri
           ORT_STRATEGY=system \
           ORT_LIB_LOCATION=/usr/local/lib/onnxruntime \
-          cargo build --release --target ${{ matrix.target }}
+          cargo tauri build --release --target ${{ matrix.target }}
 
-      # 6) Upload compiled bundles
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          if-no-files-found: warn
+          compression-level: 6
