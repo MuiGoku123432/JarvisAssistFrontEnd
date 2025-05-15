@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  semantic-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (for semantic-release)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Install semantic-release tooling
+        run: npm install -g semantic-release semantic-release-cargo
+
+      - name: Perform release
+        run: semantic-release --extends semantic-release-cargo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN:  ${{ secrets.CARGO_TOKEN }}
