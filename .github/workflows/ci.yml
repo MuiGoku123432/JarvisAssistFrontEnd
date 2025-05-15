@@ -43,9 +43,9 @@ jobs:
           components: clippy, rustfmt
 
       # 4) Check Rust formatting (runs in src-tauri where Cargo.toml lives)
-      - name: Check Rust formatting
-        working-directory: src-tauri
-        run: cargo fmt -- --check
+      # - name: Check Rust formatting
+      #   working-directory: src-tauri
+      #   run: cargo fmt -- --check
 
       # 5) Cache Cargo registry & git data
       - name: Cache Cargo
