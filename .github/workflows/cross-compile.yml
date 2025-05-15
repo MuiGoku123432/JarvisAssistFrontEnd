@@ -20,6 +20,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3                            # official checkout action :contentReference[oaicite:2]{index=2}
 
+      - name: Install Mono runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mono-complete
 
       # 1) Setup NuGet.exe CLI
       - name: Setup NuGet.exe
