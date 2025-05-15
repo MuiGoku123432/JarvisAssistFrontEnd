@@ -1,60 +1,29 @@
 {
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist"
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "jarvis-app-server",
-    "version": "2.0.0"
+  "bundle": {
+    "active": true,
+    "targets": "all"
   },
-  "tauri": {
-    "allowlist": {
-      "all": true,
-      "http": {
-        "all": true,
-        "scope": ["ws://localhost:8765", "ws://*", "wss://*", "http://*", "https://*", "ws://192.168.254.23:8765"]
+  "productName": "jarvis-app-server",
+  "mainBinaryName": "jarvis-app-server",
+  "version": "2.0.0",
+  "identifier": "jarvis-app",
+  "plugins": {},
+  "app": {
+    "security": {
+      "capabilities": [
+        "desktop-capability",
+        "migrated"
+      ],
+      "assetProtocol": {
+        "scope": [],
+        "enable": true
       },
-      "fs": {
-        "all": true,
-        "scope": [
-          "**",
-          "D:/*",
-          "D:/repos/**",
-          "D:/repos/jarvis-appV2",
-          "D:/repos/jarvis-appV2/jarvis-app",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/**",
-          "$RESOURCE/**"
-        ]
-      },
-      "path": {
-        "all": true
-      },
-      "protocol": {
-        "all": true,
-        "asset": true,
-        "assetScope": [
-          "**",
-          "D:/*",
-          "D:/repos/**",
-          "D:/repos/jarvis-appV2",
-          "D:/repos/jarvis-appV2/jarvis-app",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug",
-          "D:/repos/jarvis-appV2/jarvis-app/src-tauri/target/debug/outputs/**",
-          "$RESOURCE/**"
-        ]
-      },
-      "dialog": {
-        "all": true
-      },
-      "shell": {
-        "all": true
-      }
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; worker-src 'self' blob:; connect-src ipc: http://ipc.localhost 'self' http://localhost:5000 ws://localhost:8765; img-src 'self' data:; style-src 'self' 'unsafe-inline'; media-src 'self' asset: https://asset.localhost;"
     },
     "windows": [
       {
@@ -64,17 +33,9 @@
         "minWidth": 1486,
         "minHeight": 768,
         "resizable": true,
-        "url": "index.html"
+        "url": "index.html",
+        "useHttpsScheme": false
       }
-    ],
-    "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' blob:; worker-src 'self' blob:; connect-src 'self' http://192.168.254.23:5000 ws://192.168.254.23:8765; img-src 'self' data:; style-src 'self' 'unsafe-inline'; media-src 'self' asset: https://asset.localhost;",
-      "dangerousUseHttpScheme": true
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "jarvis-app"
-    }
+    ]
   }
 }

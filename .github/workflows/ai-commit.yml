@@ -1,0 +1,19 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  ai-code-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: AleksandrFurmenkovOfficial/ai-code-review@v0.8
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          pr_number: ${{ github.event.number }}
+          ai_provider: 'openai'
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}

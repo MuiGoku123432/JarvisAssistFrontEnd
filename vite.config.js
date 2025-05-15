@@ -4,6 +4,9 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
+
+  envDir: path.resolve(__dirname, '..'),
+
   plugins: [react()],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

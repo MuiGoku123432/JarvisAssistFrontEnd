@@ -1,0 +1,7 @@
+export var stuff
+
+export GSK_RENDERER=ngl
+export GDK_BACKEND=x11
+export QT_QPA_PLATFORM=xcb
+export WINIT_UNIX_BACKEND=x11
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
