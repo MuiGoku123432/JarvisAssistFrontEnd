@@ -37,7 +37,7 @@ jobs:
 
       # 3) Setup Rust (with clippy and rustfmt)
       - name: Setup Rust
-        uses: actions/setup-rust@v1
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust-toolchain }}
           components: clippy, rustfmt
