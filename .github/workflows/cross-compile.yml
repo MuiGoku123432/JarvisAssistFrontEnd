@@ -20,28 +20,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3                            # official checkout action :contentReference[oaicite:2]{index=2}
 
-      - name: Install NuGet CLI
-        run: sudo apt-get update && sudo apt-get install -y nuget
-
-      - name: Download ONNX Runtime binaries
+      # Option 1: .NET Global Tool installation
+      - name: Install NuGet CLI (global tool)
         run: |
-          set -eux
-          ORT_VERSION="1.22.0"
+          dotnet tool install --global NuGet.CommandLine
+      - name: Add NuGet to PATH
+        run: echo "PATH=\$PATH:\$HOME/.dotnet/tools" >> $GITHUB_ENV
 
-          # Linux x64
-          mkdir -p deps/linux
-          curl -sL \
-            https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz \
-            | tar -xz -C deps/linux --strip-components=1
-
-          # Windows x64 via NuGet
-          mkdir -p deps/windows
-          nuget install Microsoft.ML.OnnxRuntime -Version ${ORT_VERSION} -OutputDirectory deps/windows
-
-          # Export env vars for cargo build
-          echo "ORT_STRATEGY=system" >> $GITHUB_ENV
-          echo "ORT_LIB_LOCATION=$(pwd)/deps/linux" >> $GITHUB_ENV
-          echo "ORT_LIB_LOCATION_WINDOWS=$(pwd)/deps/windows/Microsoft.ML.OnnxRuntime.${ORT_VERSION}/runtimes/win-x64/native" >> $GITHUB_ENV
+      # -- Now you can fetch Windows NuGet packages, e.g. ONNX Runtime --
+      - name: Download ONNX Runtime (Windows)
+        run: |
+          mkdir deps/windows
+          nuget install Microsoft.ML.OnnxRuntime -Version 1.22.0 -OutputDirectory deps/windows
 
 
       # 1) Build the React front end
