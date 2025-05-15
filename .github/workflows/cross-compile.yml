@@ -20,6 +20,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3                            # official checkout action :contentReference[oaicite:2]{index=2}
 
+            # A) Install ONNX Runtime cross-compile prerequisites
+      - name: Install build deps & MinGW
+        run: |
+          sudo apt-get update && sudo apt-get install -y \
+            build-essential git python3 python3-pip cmake ninja-build \
+            mingw-w64 pkg-config protobuf-compiler libssl-dev libcurl4-openssl-dev
+
+      # B) Clone & build ONNX Runtime for Windows GNU
+      - name: Build ONNX Runtime (Windows GNU)
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          git clone --recursive https://github.com/microsoft/onnxruntime.git
+          cd onnxruntime
+          mkdir build && cd build
+          cmake -G Ninja \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=ON \
+            ..
+          ninja
+
+      # C) Set ORT_STRATEGY for both targets
+      - name: Configure ORT system strategy
+        run: |
+          echo "ORT_STRATEGY=system" >> $GITHUB_ENV
+          echo "ORT_LIB_LOCATION=$(pwd)/onnxruntime/build/Release" >> $GITHUB_ENV
+
       # 1) Build the React front end
       - name: Setup Node.js
         uses: actions/setup-node@v3                         # official Node setup :contentReference[oaicite:3]{index=3}
