@@ -20,18 +20,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3                            # official checkout action :contentReference[oaicite:2]{index=2}
 
-      # Option 1: .NET Global Tool installation
-      - name: Install NuGet CLI (global tool)
-        run: |
-          dotnet tool install --global NuGet.CommandLine
-      - name: Add NuGet to PATH
-        run: echo "PATH=\$PATH:\$HOME/.dotnet/tools" >> $GITHUB_ENV
 
-      # -- Now you can fetch Windows NuGet packages, e.g. ONNX Runtime --
-      - name: Download ONNX Runtime (Windows)
+      # 1) Setup NuGet.exe CLI
+      - name: Setup NuGet.exe
+        uses: nuget/setup-nuget@v2
+        with:
+          nuget-version: 'latest'          # or '5.x', specific version, etc.
+      # Now 'nuget' is on PATH without needing mono.
+
+      # 2) Download ONNX Runtime via NuGet CLI
+      - name: Download ONNX Runtime (Windows GNU)
+        if: matrix.target == 'x86_64-pc-windows-gnu'
         run: |
-          mkdir deps/windows
-          nuget install Microsoft.ML.OnnxRuntime -Version 1.22.0 -OutputDirectory deps/windows
+          mkdir -p deps/windows
+          nuget install Microsoft.ML.OnnxRuntime \
+            -Version 1.22.0 \
+            -OutputDirectory deps/windows
 
 
       # 1) Build the React front end
