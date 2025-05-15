@@ -41,7 +41,11 @@ jobs:
         with:
           toolchain: ${{ matrix.rust-toolchain }}
           components: clippy, rustfmt
-
+      # 4) Install native deps for glib-sys (Ubuntu)
+      - name: Install GLib & pkg-config
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libglib2.0-dev
       # 4) Check Rust formatting (runs in src-tauri where Cargo.toml lives)
       # - name: Check Rust formatting
       #   working-directory: src-tauri
