@@ -1,12 +1,15 @@
 name: Cross-Compile Binaries
 
 on:
-  workflow_call:
-  workflow_dispatch:
+  # Allow this workflow to be called from other workflows
+  workflow_call:                        # marks it reusable :contentReference[oaicite:0]{index=0}
+  # Also allow manual dispatch for testing
+  workflow_dispatch:                   # enables “Run workflow” buttons :contentReference[oaicite:1]{index=1}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         target:
@@ -14,45 +17,74 @@ jobs:
           - x86_64-pc-windows-gnu
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3                            # official checkout action :contentReference[oaicite:2]{index=2}
 
-      - name: Install JavaScript dependencies
-        run: npm ci
-
-      - name: Install Linux native deps
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+      # 1) Build the React front end
+      - name: Setup Node.js
+        uses: actions/setup-node@v3                         # official Node setup :contentReference[oaicite:3]{index=3}
+        with:
+          node-version: 22
+      - name: Install & build front end
         run: |
-          sudo apt-get update
-          sudo apt install -y build-essential pkg-config curl wget file \
-            libssl-dev libglib2.0-dev libgtk-3-dev libgdk-pixbuf2.0-dev \
-            libpango1.0-dev libcairo2-dev libayatana-appindicator3-dev \
-            librsvg2-dev libsecret-1-dev libwebkit2gtk-4.1-dev \
-            libjavascriptcoregtk-4.1-dev libsoup-3.0-dev libasound2-dev \
-            libxdo-dev webkit2gtk-driver
+          npm ci
+          npm run build
 
+      # 2) Install Rust + targets
       - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@v1                        # correct Rust action 
         with:
           profile: minimal
           toolchain: stable
-          components: clippy, rustfmt
-
-      - name: Add Rust target
+          components: clippy, rustfmt                        # comma‑separated list, not YAML sequence 
+      - name: Add target triple
         run: rustup target add ${{ matrix.target }}
 
-      - name: Install MinGW for Windows on Ubuntu
-        if: matrix.target == 'x86_64-pc-windows-gnu'
+      - name: Install Tauri JS CLI
+        run: npm install --save-dev @tauri-apps/cli@latest
+
+
+      # 3) MinGW for Windows
+      - name: Install MinGW for Windows
         run: sudo apt-get update && sudo apt-get install -y mingw-w64
 
-      - name: Build and bundle Tauri for ${{ matrix.target }}
+      # 4) System libs for Linux builds
+      - name: Install native deps for GTK & WebKit (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt install \
+            build-essential pkg-config curl wget file \
+            libssl-dev \
+            libglib2.0-dev \
+            libgtk-3-dev libgdk-pixbuf2.0-dev libpango1.0-dev libcairo2-dev \
+            libayatana-appindicator3-dev librsvg2-dev libsecret-1-dev \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev \
+            libasound2-dev \
+            libxdo-dev \
+            webkit2gtk-driver
+
+      # 5) Build the Tauri backend
+      - name: Build Tauri for ${{ matrix.target }}
         run: |
           cd src-tauri
-          npx tauri build --release --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload artifacts
+      # 6a) Upload Linux bundles
+      - name: Upload Linux bundles
+        if: matrix.target != 'x86_64-pc-windows-gnu'
+        uses: actions/upload-artifact@v4                  # official upload action :contentReference[oaicite:6]{index=6}
+        with:
+          name: linux-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/*.deb
+
+      # 6b) Upload Windows executable
+      - name: Upload Windows exe
+        if: matrix.target == 'x86_64-pc-windows-gnu'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}
-          path: src-tauri/target/${{ matrix.target }}/release/bundle/
-          if-no-files-found: warn
-          compression-level: 6
+          name: windows-${{ matrix.target }}
+          path: src-tauri/target/${{ matrix.target }}/release/jarvis-app.exe
