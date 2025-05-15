@@ -1,8 +1,8 @@
 name: Cross-Compile Binaries
 
 on:
-  workflow_dispatch:          # <-- enables manual runs :contentReference[oaicite:0]{index=0}
   workflow_call:                        # makes this workflow callable :contentReference[oaicite:7]{index=7}
+  workflow_dispatch:          # <-- enables manual runs :contentReference[oaicite:0]{index=0}
 
 jobs:
   build:

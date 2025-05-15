@@ -10,7 +10,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-        with: { node-version: 22 }
+        with:
+          node-version: 22
       - run: npm ci
       - name: Semantic Release
         env:
@@ -18,8 +19,8 @@ jobs:
         run: npx semantic-release
 
   cross_compile:
-    needs: semantic_release           # wait for semantic-release to succeed :contentReference[oaicite:9]{index=9}
-    uses: ./.github/workflows/cross-compile.yml  # call reusable workflow :contentReference[oaicite:10]{index=10}
+    needs: semantic_release
+    uses: ./.github/workflows/cross-compile.yml  # must point to a workflow with on: workflow_call
 
   attach_artifacts:
     needs: cross_compile
@@ -31,7 +32,7 @@ jobs:
           path: ./artifacts
 
       - name: Attach to GitHub Release
-        uses: softprops/[email protected]
+        uses: softprops/[email protected]  # correct owner/repo@ref
         with:
           tag_name: ${{ github.ref_name }}
           files: artifacts/**/*.{AppImage,rpm,deb,exe}
