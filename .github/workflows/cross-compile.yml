@@ -72,7 +72,7 @@ jobs:
       # 6a) Upload Linux bundles
       - name: Upload Linux bundles
         if: matrix.target != 'x86_64-pc-windows-gnu'
-        uses: actions/upload-artifact@v3                  # official upload action :contentReference[oaicite:6]{index=6}
+        uses: actions/upload-artifact@v4                  # official upload action :contentReference[oaicite:6]{index=6}
         with:
           name: linux-${{ matrix.target }}
           path: |
@@ -83,7 +83,7 @@ jobs:
       # 6b) Upload Windows executable
       - name: Upload Windows exe
         if: matrix.target == 'x86_64-pc-windows-gnu'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows-${{ matrix.target }}
           path: src-tauri/target/${{ matrix.target }}/release/jarvis-app.exe
