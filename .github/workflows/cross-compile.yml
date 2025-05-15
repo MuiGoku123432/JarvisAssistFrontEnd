@@ -88,6 +88,9 @@ jobs:
 
       # 5) Build the Tauri backend
       - name: Build Tauri for ${{ matrix.target }}
+        env:
+           ORT_STRATEGY: system
+           ORT_LIB_LOCATION: ../deps/windows
         run: |
           cd src-tauri
           cargo build --release --target ${{ matrix.target }}
