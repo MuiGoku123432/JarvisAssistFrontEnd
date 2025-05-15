@@ -1,28 +1,51 @@
-name: Cross-Compile Binaries
+name: CI
 
 on:
-  workflow_call:
-  workflow_dispatch:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ '**' ]
 
 jobs:
-  build:
+  test-and-build:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-pc-windows-gnu
+        node-version: [22.x]
+        rust-toolchain: [stable]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      # 1) Linux host dependencies (GTK/WebKit/etc)
-      - name: Install Linux native deps
+      # 1) Setup Node
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      # - name: Frontend Lint & Test
+      #   run: |
+      #     npm run lint
+      #     npm test
+
+      # 2) Build the React app
+      - name: Build Frontend
+        run: npm run build
+
+      # 3) Setup Rust (with clippy and rustfmt)
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust-toolchain }}
+          components: clippy, rustfmt
+      # 4) Install native deps for glib-sys (Ubuntu)
+      - name: Install GLib & pkg-config
         run: |
           sudo apt-get update
-          sudo apt install -y \
+          sudo apt install \
             build-essential pkg-config curl wget file \
             libssl-dev \
             libglib2.0-dev \
@@ -34,42 +57,22 @@ jobs:
             libxdo-dev \
             webkit2gtk-driver
 
-      # 2) Build the React front end
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      # 4) Check Rust formatting (runs in src-tauri where Cargo.toml lives)
+      # - name: Check Rust formatting
+      #   working-directory: src-tauri
+      #   run: cargo fmt -- --check
+
+      # 5) Cache Cargo registry & git data
+      - name: Cache Cargo
+        uses: actions/cache@v3
         with:
-          node-version: 22
-      - name: Install & build front end
-        run: |
-          npm ci
-          npm run build
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      # 3) Rust + cross‑compile targets
-      - name: Setup Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: clippy, rustfmt
-      - name: Add Rust target
-        run: rustup target add ${{ matrix.target }}
-
-      # 4) MinGW for Windows GNU on Ubuntu
-      - name: Install MinGW for Windows
-        if: matrix.target == 'x86_64-pc-windows-gnu'
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
-      # 5) Build Tauri backend (both targets)
-      - name: Build Tauri for ${{ matrix.target }}
+      # 6) Tauri build (dev binaries)
+      - name: Tauri Build (dev binaries)
         run: |
           cd src-tauri
-          ORT_STRATEGY=system \
-          ORT_LIB_LOCATION=/usr/local/lib/onnxruntime \
-          cargo build --release --target ${{ matrix.target }}
-
-      # 6) Upload compiled bundles
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.target }}
-          path: src-tauri/target/${{ matrix.target }}/release/bundle/
+          cargo build --release
