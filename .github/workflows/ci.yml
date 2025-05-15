@@ -51,6 +51,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
+      # Install JavaScriptCore GTK 4.1 dev headers (for javascriptcore-rs-sys)
+      - name: Install JavaScriptCore GTK dev headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libjavascriptcoregtk-4.1-dev
       # 4) Check Rust formatting (runs in src-tauri where Cargo.toml lives)
       # - name: Check Rust formatting
       #   working-directory: src-tauri
