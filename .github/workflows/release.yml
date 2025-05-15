@@ -5,22 +5,33 @@ on:
     branches: [ main ]
 
 jobs:
-  semantic-release:
+  semantic_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js (for semantic-release)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-
-      - name: Install semantic-release tooling
-        run: npm install -g semantic-release semantic-release-cargo
-
-      - name: Perform release
-        run: semantic-release --extends semantic-release-cargo
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CARGO_REGISTRY_TOKEN:  ${{ secrets.CARGO_TOKEN }}
+        run: npx semantic-release
+
+  cross_compile:
+    needs: semantic_release           # wait for semantic-release to succeed :contentReference[oaicite:9]{index=9}
+    uses: ./.github/workflows/cross-compile.yml  # call reusable workflow :contentReference[oaicite:10]{index=10}
+
+  attach_artifacts:
+    needs: cross_compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts
+
+      - name: Attach to GitHub Release
+        uses: softprops/[email protected]
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: artifacts/**/*.{AppImage,rpm,deb,exe}

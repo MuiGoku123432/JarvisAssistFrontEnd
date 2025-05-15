@@ -1,47 +1,53 @@
 name: Cross-Compile Binaries
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'    # e.g. v0.1.0, v1.2.3
-
   workflow_dispatch:          # <-- enables manual runs :contentReference[oaicite:0]{index=0}
+  workflow_call:                        # makes this workflow callable :contentReference[oaicite:7]{index=7}
 
 jobs:
-  build-all:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-pc-windows-gnu
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+    steps:
+      - uses: actions/checkout@v3
+
+      # 1) Setup Node & build frontend
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run build
+
+      # 2) Setup Rust & target
+      - name: Setup Rust
+        uses: actions/setup-rust@v1
         with:
           toolchain: stable
-          override: true
+      - run: rustup target add ${{ matrix.target }}
 
-      - name: Install cross (for cross-compilation)
-        run: cargo install cross
+      # 3) If building Windows, install MinGW
+      - name: Install MinGW for Windows cross‑compile
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
 
-      - name: Add musl & Windows targets
+      # 4) Build for each target
+      - name: Cargo build --release for ${{ matrix.target }}
         run: |
-          rustup target add x86_64-unknown-linux-musl
-          rustup target add x86_64-pc-windows-gnu
+          cd src-tauri
+          cargo build --release --target ${{ matrix.target }}
 
-      - name: Build Linux (MUSL) and Windows (GNU)
-        run: |
-          cross build --release --target x86_64-unknown-linux-musl
-          cross build --release --target x86_64-pc-windows-gnu
-
-      - name: list build outputs
-        run: |
-          ls -l target/x86_64-unknown-linux-musl/release
-          ls -l target/x86_64-pc-windows-gnu/release
-
-      - name: Upload backend artifacts
-        uses: actions/upload-artifact@v4
+      # 5) Collect artifacts
+      - name: Upload bundles/exe
+        uses: actions/upload-artifact@v3
         with:
-          name: backend-binaries
+          name: tauri-${{ matrix.target }}
           path: |
-            target/x86_64-unknown-linux-musl/release/jarvis-rust-backend
-            target/x86_64-pc-windows-gnu/release/jarvis-rust-backend.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle
+            src-tauri/target/${{ matrix.target }}/release/${{ matrix.target == 'x86_64-pc-windows-gnu' && 'jarvis-app.exe' || '' }}

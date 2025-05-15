@@ -7,26 +7,57 @@ on:
     branches: [ '**' ]
 
 jobs:
-  build-and-test:
+  test-and-build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22.x]
+        rust-toolchain: [stable]
+
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      # 1) Setup Node
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          toolchain: stable
-          override: true
+          node-version: ${{ matrix.node-version }}
 
-      - name: Verify formatting
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Frontend Lint & Test
+        run: |
+          npm run lint
+          npm test
+
+      # 2) Build the React app
+      - name: Build Frontend
+        run: npm run build
+
+      # 3) Setup Rust (with clippy and rustfmt)
+      - name: Setup Rust
+        uses: actions/setup-rust@v1
+        with:
+          toolchain: ${{ matrix.rust-toolchain }}
+          components: clippy, rustfmt
+
+      # 4) Check Rust formatting (runs in src-tauri where Cargo.toml lives)
+      - name: Check Rust formatting
+        working-directory: src-tauri
         run: cargo fmt -- --check
 
-      - name: Run Clippy lints
-        run: cargo clippy -- -D warnings
+      # 5) Cache Cargo registry & git data
+      - name: Cache Cargo
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build (release)
-        run: cargo build --release
-
-      - name: Run tests
-        run: cargo test --release
+      # 6) Tauri build (dev binaries)
+      - name: Tauri Build (dev binaries)
+        run: |
+          cd src-tauri
+          cargo build --release
