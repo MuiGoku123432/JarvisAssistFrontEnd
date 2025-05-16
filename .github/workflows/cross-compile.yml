@@ -91,7 +91,7 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           cd src-tauri
-          npm run tauri build --bundles deb,rpm
+          npx tauri build --bundles deb,rpm
 
       - name: Build Tauri for Windows
         if: matrix.target == 'x86_64-pc-windows-gnu'
