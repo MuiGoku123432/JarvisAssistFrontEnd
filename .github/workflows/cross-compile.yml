@@ -95,6 +95,9 @@ jobs:
 
       - name: Build Tauri for Windows
         if: matrix.target == 'x86_64-pc-windows-gnu'
+        env:
+           ORT_STRATEGY: system
+           ORT_LIB_LOCATION: ../deps/windows
         run: |
            cd src-tauri
            cargo build --release --target ${{ matrix.target }}
