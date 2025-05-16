@@ -35,7 +35,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            artifacts/**/*.AppImage
             artifacts/**/*.rpm
             artifacts/**/*.deb
             artifacts/**/*.exe
