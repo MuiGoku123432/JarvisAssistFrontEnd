@@ -91,7 +91,7 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           cd src-tauri
-          npm run tauri build
+          npm run tauri build --bundles deb,rpm
 
       - name: Build Tauri for Windows
         if: matrix.target == 'x86_64-pc-windows-gnu'
@@ -109,7 +109,6 @@ jobs:
         with:
           name: linux-${{ matrix.target }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/*.rpm
             src-tauri/target/${{ matrix.target }}/release/bundle/*.deb
 
