@@ -30,11 +30,15 @@ jobs:
         with:
           path: ./artifacts
 
+      - name: Get latest tag
+        id: get_latest_tag
+        run: echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ steps.get_latest_tag.outputs.tag }}
           files: |
-            artifacts/**/*.rpm
-            artifacts/**/*.deb
-            artifacts/**/*.exe
+              artifacts/**/*.rpm
+              artifacts/**/*.deb
+              artifacts/**/*.exe
