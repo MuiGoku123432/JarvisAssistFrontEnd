@@ -26,19 +26,24 @@ jobs:
     needs: cross_compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Fetch all history and tags
 
-      - name: Get latest tag
-        id: get_latest_tag
-        run: echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+    - name: Get latest tag
+      id: get_latest_tag
+      run: echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
 
-      - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.get_latest_tag.outputs.tag }}
-          files: |
-              artifacts/**/*.rpm
-              artifacts/**/*.deb
-              artifacts/**/*.exe
+    - uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Attach to GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_latest_tag.outputs.tag }}
+        files: |
+            artifacts/**/*.rpm
+            artifacts/**/*.deb
+            artifacts/**/*.exe
