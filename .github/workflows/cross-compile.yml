@@ -109,8 +109,8 @@ jobs:
         with:
           name: linux-${{ matrix.target }}
           path: |
-            src-tauri/target/release/bundle/*.rpm
-            src-tauri/target/release/bundle/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/deb/*.deb
 
       # 6b) Upload Windows executable
       - name: Upload Windows exe
